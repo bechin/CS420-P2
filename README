@@ -1,0 +1,5 @@
+To compile:
+javac NQueens.java
+
+To run:
+java NQueens [hill|genetic] [100|1]

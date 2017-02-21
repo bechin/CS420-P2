@@ -10,10 +10,11 @@ import java.util.Set;
 
 public class NQueens implements Comparable<NQueens>{
 
+    private static final boolean DEBUG_MODE = false;
     private static final int N = 20;
-    private static final int MAX_GENERATIONS = 1;
-    private static final int POPULATION_SIZE = 2;
-    private static final int CROSSOVER_RATE = 50;
+    private static final int MAX_GENERATIONS = (DEBUG_MODE)? 1: Integer.MAX_VALUE;
+    private static final int POPULATION_SIZE = (DEBUG_MODE)? 2: 100;
+    private static final int CROSSOVER_RATE = (DEBUG_MODE)? 100: 50;
 
     private static Random r = new Random();
     private static int totalSearchCost = 0;
@@ -21,7 +22,7 @@ public class NQueens implements Comparable<NQueens>{
     private static int generationCount = 0;
 
     private byte[] board;
-    private PriorityQueue<NQueens> kids;
+    private Queue<NQueens> kids;
 
     public static void main(String[] args){
         if(args.length != 2){
@@ -35,49 +36,37 @@ public class NQueens implements Comparable<NQueens>{
         int solved = 0;
         int numOfInstances = Integer.parseInt(args[1]);
         switch (args[0]){
-            case"hill":
-                break;
-            case"genetic":
-                break;
-            default:
-        }
-        //GENETIC----------------------
-        for (int i = 0; i < numOfInstances; i++) {
-            long start = System.currentTimeMillis();
-            if(geneticSolve(POPULATION_SIZE)){
-                solved++;
-            }
-            totalTimeElapsed += System.currentTimeMillis() - start;
-        }
+            case "hill": {
+                //HILL CLIMB-----------------------
+                Set<NQueens> setOfInstances = generateUniqueInstances(numOfInstances);
 
-/*        
-        //HILL CLIMB-----------------------
-        Set<NQueens> setOfInstances = generateUniqueInstances(numOfInstances);
-        
-        for(NQueens instance : setOfInstances){
-            long start = System.currentTimeMillis();
-            if(hillClimbSolve(instance)){
-                solved++;
+                for(NQueens instance : setOfInstances){
+                    long start = System.currentTimeMillis();
+                    if(hillClimbSolve(instance)){
+                        solved++;
+                    }
+                    totalTimeElapsed += System.currentTimeMillis() - start;
+                }
+                break;
             }
-            totalTimeElapsed += System.currentTimeMillis() - start;
+            case "genetic": {
+                //GENETIC----------------------
+                for (int i = 0; i < numOfInstances; i++) {
+                    long start = System.currentTimeMillis();
+                    if (geneticSolve(POPULATION_SIZE)) {
+                        solved++;
+                    }
+                    totalTimeElapsed += System.currentTimeMillis() - start;
+                }
+                break;
+            }
+            default:
+                System.out.println("Invalid input! [hill|genetic]");
+                System.exit(1);
         }
-*/
         System.out.println("Percent solved: " + solved/(double)numOfInstances * 100);
         System.out.println("Average search cost: " + totalSearchCost/(double)numOfInstances + " nodes");
         System.out.println("Average time elapsed: " + totalTimeElapsed/(double)numOfInstances + " ms");
-/*
-        //STANDALONE----------------------------
-        byte[] standalone = {2, 0, 3, 1};
-        totalSearchCost = 0;
-        NQueens alone = new NQueens(standalone);
-        System.out.println(alone);
-        totalTimeElapsed = System.currentTimeMillis();
-        boolean singleSolved = hillClimbSolve(alone);
-        totalTimeElapsed = System.currentTimeMillis() - totalTimeElapsed;
-        System.out.println("Solved? " + singleSolved);
-        System.out.println("Search cost: " + totalSearchCost);
-        System.out.println("Time elapsed: " + totalTimeElapsed + "ms");
-*/
     }
 
     private static Set<NQueens> generateUniqueInstances(int n){
@@ -113,48 +102,51 @@ public class NQueens implements Comparable<NQueens>{
     }
 
     public static boolean geneticSolve(int populationSize){
-        Queue<NQueens> population = new PriorityQueue<>(generateUniqueInstances(populationSize));
-        System.out.println("INITIAL---------");
-        for (NQueens instance:
-             population) {
-            System.out.println(Arrays.toString(instance.board) + " " + instance.fitness());
-        }
-        while(!population.peek().isSolved() && generationCount < MAX_GENERATIONS){
-            Queue<NQueens> nextPopulation = new PriorityQueue<>();
-            while(!population.isEmpty()) {
-                NQueens mommy = population.poll();
-                NQueens daddy = population.poll();  //in an odd parity population, daddy could be null
-                nextPopulation.addAll(makeBabiesFrom(mommy, daddy));
+        List<NQueens> population = new ArrayList<>(generateUniqueInstances(populationSize));
+        Collections.sort(population);
+        if(DEBUG_MODE) {
+            System.out.println("INITIAL---------");
+            for (NQueens instance :
+                    population) {
+                System.out.println(Arrays.toString(instance.board) + " " + instance.fitness());
             }
-            totalSearchCost += nextPopulation.size();
+        }
+        while(!population.get(0).isSolved() && generationCount < MAX_GENERATIONS){
+            for (int i = 0; i < populationSize/2; i++) {
+                NQueens mommy = population.get(r.nextInt(populationSize));
+                NQueens daddy = mommy;
+                while (mommy.equals(daddy)){
+                    daddy = population.get(r.nextInt(POPULATION_SIZE));
+                }
+                makeBabiesFrom(mommy, daddy);
+            }
+            totalSearchCost += populationSize;
             generationCount++;
-            population = nextPopulation;
+            System.out.println("Generation: " + generationCount);
+            Collections.sort(population);
         }
-        System.out.println("FINAL---------------------");
-        for (NQueens instance:
-                population) {
-            System.out.println(Arrays.toString(instance.board) + " " + instance.fitness());
+
+        if(DEBUG_MODE) {
+            System.out.println("FINAL---------------------");
+            for (NQueens instance:
+                    population) {
+                System.out.println(Arrays.toString(instance.board) + " " + instance.fitness());
+            }
         }
-        return population.peek().isSolved();
+
+        return population.get(0).isSolved();
     }
 
-    public static Queue<NQueens> makeBabiesFrom(NQueens mommy, NQueens daddy){
-        Queue<NQueens> babies = new PriorityQueue<>();
-        babies.add(mommy);
-        if(daddy != null){
-            if(r.nextInt(100) < CROSSOVER_RATE) {
-                int crossoverPoint = r.nextInt(N - 1) + 1;
-                //in situ crossover with XOR
-                for (int i = 0; i < crossoverPoint; i++) {
-                    swap(mommy, daddy, i);
-                }
+    public static void makeBabiesFrom(NQueens mommy, NQueens daddy){
+        if(r.nextInt(100) < CROSSOVER_RATE) {
+            int crossoverPoint = r.nextInt(N - 1) + 1;
+            //in situ crossover with XOR
+            for (int i = 0; i < crossoverPoint; i++) {
+                swap(mommy, daddy, i);
             }
-            babies.add(daddy);
         }
-        for (NQueens instance : babies) {
-            instance.mutate();
-        }
-        return babies;
+        mommy.mutate();
+        daddy.mutate();
     }
     
     public static void swap(NQueens mommy, NQueens daddy, int i){
@@ -171,7 +163,7 @@ public class NQueens implements Comparable<NQueens>{
         }
     }
 
-    public PriorityQueue<NQueens> getKids(){
+    public Queue<NQueens> getKids(){
         if(kids == null){
             kids = new PriorityQueue<>();
             for (int i = 0; i < board.length; i++) {
@@ -219,6 +211,17 @@ public class NQueens implements Comparable<NQueens>{
     @Override
     public int compareTo(NQueens that){
         return this.fitness() - that.fitness();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        NQueens nQueens = (NQueens) o;
+
+        return Arrays.equals(board, nQueens.board);
+
     }
 
     @Override
